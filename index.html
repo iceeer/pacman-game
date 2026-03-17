@@ -53,9 +53,9 @@
       text-align: center;
     }
 
-    /* 虚拟方向键 */
+    /* 虚拟方向键 - 始终显示 */
     #dpad {
-      display: none;
+      display: flex;
       position: relative;
       width: 180px;
       height: 180px;
@@ -106,10 +106,7 @@
       text-align: center;
     }
 
-    @media (pointer: coarse) {
-      #dpad { display: flex; }
-      #pc-hint { display: none; }
-    }
+
   </style>
 </head>
 <body>
@@ -448,13 +445,20 @@
       if (e.key==='Enter'||e.key===' ') { e.preventDefault(); handleAction('start'); }
     });
 
-    // 虚拟按钮
+    // 虚拟按钮 - 多事件兼容
     function bindBtn(id, action) {
       const el = document.getElementById(id);
       if (!el) return;
-      el.addEventListener('touchstart', e => { e.preventDefault(); el.classList.add('pressed'); handleAction(action); }, { passive: false });
-      el.addEventListener('touchend',   e => { e.preventDefault(); el.classList.remove('pressed'); }, { passive: false });
-      el.addEventListener('mousedown',  e => { handleAction(action); });
+      const doAction = (e) => { e.preventDefault(); e.stopPropagation(); el.classList.add('pressed'); handleAction(action); };
+      const endAction = (e) => { e.preventDefault(); el.classList.remove('pressed'); };
+      // 触摸
+      el.addEventListener('touchstart', doAction, { passive: false });
+      el.addEventListener('touchend', endAction, { passive: false });
+      // 鼠标
+      el.addEventListener('mousedown', doAction);
+      el.addEventListener('mouseup', endAction);
+      // 通用点击（兜底）
+      el.addEventListener('click', (e) => { e.preventDefault(); handleAction(action); });
     }
     bindBtn('btn-up',    'up');
     bindBtn('btn-down',  'down');
