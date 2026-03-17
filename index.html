@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>吃豆人 Pac-Man</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Arial', sans-serif;
+      color: #fff;
+    }
+    h1 {
+      font-size: 2rem;
+      color: #FFD700;
+      margin-bottom: 10px;
+      letter-spacing: 4px;
+      text-shadow: 0 0 10px #FFD700;
+    }
+    #info {
+      display: flex;
+      gap: 40px;
+      margin-bottom: 10px;
+      font-size: 1.1rem;
+    }
+    #info span { color: #FFD700; font-weight: bold; }
+    canvas {
+      border: 3px solid #1a1aff;
+      box-shadow: 0 0 20px #1a1aff, 0 0 40px #1a1aff44;
+      border-radius: 4px;
+    }
+    #message {
+      margin-top: 14px;
+      font-size: 1.3rem;
+      color: #FFD700;
+      min-height: 30px;
+      letter-spacing: 2px;
+    }
+    #controls {
+      margin-top: 12px;
+      font-size: 0.85rem;
+      color: #aaa;
+      text-align: center;
+      line-height: 1.8;
+    }
+  </style>
+</head>
+<body>
+  <h1>🟡 PAC-MAN</h1>
+  <div id="info">
+    <div>得分: <span id="score">0</span></div>
+    <div>最高分: <span id="highscore">0</span></div>
+    <div>生命: <span id="lives">3</span></div>
+    <div>关卡: <span id="level">1</span></div>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+  <div id="message">按 Enter 或空格键开始游戏</div>
+  <div id="controls">
+    方向键 / WASD 移动 &nbsp;|&nbsp; Enter / 空格 开始/暂停<br/>
+    手机端：点击屏幕四个方向区域控制移动
+  </div>
+
+  <script>
+  (function() {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // 地图定义：0=通道, 1=墙, 2=豆子, 3=大力豆, 4=空
+    const TILE = 20;
+    const COLS = 28;
+    const ROWS = 31;
+    canvas.width  = COLS * TILE;
+    canvas.height = ROWS * TILE;
+
+    // 经典地图（简化版）
+    const MAP_TEMPLATE = [
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+      [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+      [1,3,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,3,1],
+      [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+      [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+      [1,2,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,2,1],
+      [1,2,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,2,1],
+      [1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,2,1],
+      [1,1,1,1,1,1,2,1,1,1,1,1,4,1,1,4,1,1,1,1,1,2,1,1,1,1,1,1],
+      [1,1,1,1,1,1,2,1,1,1,1,1,4,1,1,4,1,1,1,1,1,2,1,1,1,1,1,1],
+      [1,1,1,1,1,1,2,1,1,4,4,4,4,4,4,4,4,4,4,1,1,2,1,1,1,1,1,1],
+      [1,1,1,1,1,1,2,1,1,4,1,1,1,4,4,1,1,1,4,1,1,2,1,1,1,1,1,1],
+      [1,1,1,1,1,1,2,1,1,4,1,4,4,4,4,4,4,1,4,1,1,2,1,1,1,1,1,1],
+      [4,4,4,4,4,4,2,4,4,4,1,4,4,4,4,4,4,1,4,4,4,2,4,4,4,4,4,4],
+      [1,1,1,1,1,1,2,1,1,4,1,4,4,4,4,4,4,1,4,1,1,2,1,1,1,1,1,1],
+      [1,1,1,1,1,1,2,1,1,4,1,1,1,1,1,1,1,1,4,1,1,2,1,1,1,1,1,1],
+      [1,1,1,1,1,1,2,1,1,4,4,4,4,4,4,4,4,4,4,1,1,2,1,1,1,1,1,1],
+      [1,1,1,1,1,1,2,1,1,4,1,1,1,1,1,1,1,1,4,1,1,2,1,1,1,1,1,1],
+      [1,1,1,1,1,1,2,1,1,4,1,1,1,1,1,1,1,1,4,1,1,2,1,1,1,1,1,1],
+      [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+      [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+      [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+      [1,3,2,2,1,1,2,2,2,2,2,2,2,4,4,2,2,2,2,2,2,2,1,1,2,2,3,1],
+      [1,1,1,2,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,2,1,1,1],
+      [1,1,1,2,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,2,1,1,1],
+      [1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,2,1],
+      [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+      [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+      [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ];
+
+    // 游戏状态
+    let map, score, highscore, lives, level, gameState, powerTimer;
+    let pacman, ghosts, dots, powerDots;
+    let animFrame, lastTime, ghostEaten;
+
+    const GHOST_COLORS = ['#FF0000','#FFB8FF','#00FFFF','#FFB852'];
+    const GHOST_NAMES  = ['Blinky','Pinky','Inky','Clyde'];
+
+    function initGame() {
+      map = MAP_TEMPLATE.map(r => [...r]);
+      score = 0;
+      lives = 3;
+      level = 1;
+      powerTimer = 0;
+      ghostEaten = 0;
+      gameState = 'ready'; // ready | playing | paused | dead | win | over
+
+      // 统计豆子
+      dots = 0; powerDots = 0;
+      for (let r = 0; r < ROWS; r++)
+        for (let c = 0; c < COLS; c++) {
+          if (map[r][c] === 2) dots++;
+          if (map[r][c] === 3) powerDots++;
+        }
+
+      pacman = {
+        x: 13.5, y: 23,
+        dx: 0, dy: 0,
+        nextDx: 0, nextDy: 0,
+        speed: 0.1,
+        mouthAngle: 0.25,
+        mouthDir: 1,
+        dead: false,
+        deadAnim: 0
+      };
+
+      ghosts = GHOST_COLORS.map((color, i) => ({
+        x: 11 + i * 2, y: 14,
+        dx: 0, dy: 0,
+        color,
+        name: GHOST_NAMES[i],
+        mode: 'house', // house | scatter | chase | frightened | eaten
+        houseTimer: i * 60,
+        speed: 0.08,
+        targetX: 0, targetY: 0,
+        eyeDir: { dx: 1, dy: 0 }
+      }));
+
+      updateUI();
+    }
+
+    function updateUI() {
+      document.getElementById('score').textContent = score;
+      document.getElementById('highscore').textContent = highscore || 0;
+      document.getElementById('lives').textContent = lives;
+      document.getElementById('level').textContent = level;
+    }
+
+    function setMessage(msg) {
+      document.getElementById('message').textContent = msg;
+    }
+
+    // 碰撞检测：是否可以走
+    function canMove(x, y) {
+      const margin = 0.4;
+      const corners = [
+        [x - margin, y - margin],
+        [x + margin, y - margin],
+        [x - margin, y + margin],
+        [x + margin, y + margin],
+      ];
+      for (const [cx, cy] of corners) {
+        const col = Math.floor(cx);
+        const row = Math.floor(cy);
+        if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return false;
+        if (map[row][col] === 1) return false;
+      }
+      return true;
+    }
+
+    function wrapX(x) {
+      if (x < 0) return COLS - 0.5;
+      if (x >= COLS) return 0.5;
+      return x;
+    }
+
+    function movePacman() {
+      const p = pacman;
+      // 尝试转向
+      const nx = p.x + p.nextDx * p.speed;
+      const ny = p.y + p.nextDy * p.speed;
+      if (canMove(nx, ny)) {
+        p.dx = p.nextDx; p.dy = p.nextDy;
+      }
+      // 移动
+      const mx = p.x + p.dx * p.speed;
+      const my = p.y + p.dy * p.speed;
+      if (canMove(mx, my)) {
+        p.x = wrapX(mx); p.y = my;
+      }
+      // 嘴巴动画
+      p.mouthAngle += 0.05 * p.mouthDir;
+      if (p.mouthAngle > 0.3 || p.mouthAngle < 0.02) p.mouthDir *= -1;
+
+      // 吃豆子
+      const col = Math.round(p.x);
+      const row = Math.round(p.y);
+      if (row >= 0 && row < ROWS && col >= 0 && col < COLS) {
+        if (map[row][col] === 2) {
+          map[row][col] = 4;
+          score += 10; dots--;
+          updateUI();
+        } else if (map[row][col] === 3) {
+          map[row][col] = 4;
+          score += 50; powerDots--;
+          updateUI();
+          // 大力模式
+          powerTimer = 300;
+          ghostEaten = 0;
+          ghosts.forEach(g => {
+            if (g.mode !== 'eaten' && g.mode !== 'house') g.mode = 'frightened';
+          });
+        }
+      }
+      if (dots + powerDots <= 0) {
+        gameState = 'win';
+        setMessage('🎉 恭喜过关！按 Enter 继续');
+      }
+    }
+
+    function moveGhost(g) {
+      if (g.mode === 'house') {
+        g.houseTimer--;
+        if (g.houseTimer <= 0) {
+          g.x = 13.5; g.y = 11; g.mode = 'scatter';
+        }
+        return;
+      }
+      if (g.mode === 'eaten') {
+        // 回家
+        const tx = 13.5, ty = 14;
+        const dx = tx - g.x, dy = ty - g.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 0.5) { g.mode = 'scatter'; g.x = tx; g.y = ty; return; }
+        g.x += (dx/dist) * g.speed * 2;
+        g.y += (dy/dist) * g.speed * 2;
+        return;
+      }
+
+      // 目标
+      if (g.mode === 'frightened') {
+        g.targetX = Math.random() * COLS;
+        g.targetY = Math.random() * ROWS;
+      } else if (g.mode === 'chase') {
+        g.targetX = pacman.x; g.targetY = pacman.y;
+      } else {
+        // scatter: 各自角落
+        const corners = [[1,1],[COLS-2,1],[1,ROWS-2],[COLS-2,ROWS-2]];
+        const idx = GHOST_COLORS.indexOf(g.color);
+        g.targetX = corners[idx][0]; g.targetY = corners[idx][1];
+      }
+
+      // 选择最佳方向（不能反向）
+      const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+      let best = null, bestDist = Infinity;
+      for (const d of dirs) {
+        if (d.dx === -g.dx && d.dy === -g.dy) continue; // 不反向
+        const nx = g.x + d.dx * g.speed;
+        const ny = g.y + d.dy * g.speed;
+        if (!canMove(nx, ny)) continue;
+        const dist = (nx - g.targetX)**2 + (ny - g.targetY)**2;
+        if (g.mode === 'frightened' ? dist > bestDist : dist < bestDist) {
+          bestDist = dist; best = d;
+        }
+      }
+      if (best) {
+        g.dx = best.dx; g.dy = best.dy;
+        g.eyeDir = { dx: best.dx, dy: best.dy };
+      }
+      g.x = wrapX(g.x + g.dx * g.speed);
+      g.y += g.dy * g.speed;
+    }
+
+    function checkCollisions() {
+      for (const g of ghosts) {
+        if (g.mode === 'house' || g.mode === 'eaten') continue;
+        const dx = g.x - pacman.x, dy = g.y - pacman.y;
+        if (Math.sqrt(dx*dx + dy*dy) < 0.8) {
+          if (g.mode === 'frightened') {
+            g.mode = 'eaten';
+            ghostEaten++;
+            score += 200 * (1 << ghostEaten);
+            updateUI();
+          } else {
+            // 死亡
+            lives--;
+            updateUI();
+            if (lives <= 0) {
+              gameState = 'over';
+              if (score > (highscore||0)) { highscore = score; updateUI(); }
+              setMessage('💀 游戏结束！按 Enter 重新开始');
+            } else {
+              gameState = 'dead';
+              pacman.dead = true;
+              pacman.deadAnim = 0;
+              setMessage('💥 按 Enter 继续');
+            }
+            return;
+          }
+        }
+      }
+    }
+
+    // ---- 绘制 ----
+    function drawMap() {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const v = map[r][c];
+          const x = c * TILE, y = r * TILE;
+          if (v === 1) {
+            ctx.fillStyle = '#1a1aff';
+            ctx.fillRect(x, y, TILE, TILE);
+            // 内边框
+            ctx.strokeStyle = '#4444ff';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x+1, y+1, TILE-2, TILE-2);
+          } else if (v === 2) {
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(x + TILE/2, y + TILE/2, 2.5, 0, Math.PI*2);
+            ctx.fill();
+          } else if (v === 3) {
+            ctx.fillStyle = '#FFD700';
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(x + TILE/2, y + TILE/2, 5, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+          }
+        }
+      }
+    }
+
+    function drawPacman() {
+      const p = pacman;
+      const px = p.x * TILE, py = p.y * TILE;
+      if (p.dead) {
+        // 死亡动画
+        const angle = (p.deadAnim / 30) * Math.PI;
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.arc(px, py, TILE/2 - 1, angle, Math.PI*2 - angle);
+        ctx.closePath();
+        ctx.fill();
+        p.deadAnim++;
+        return;
+      }
+      // 方向角度
+      let baseAngle = 0;
+      if (p.dx === 1)  baseAngle = 0;
+      if (p.dx === -1) baseAngle = Math.PI;
+      if (p.dy === -1) baseAngle = -Math.PI/2;
+      if (p.dy === 1)  baseAngle = Math.PI/2;
+
+      ctx.fillStyle = '#FFD700';
+      ctx.shadowColor = '#FFD700';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.arc(px, py, TILE/2 - 1,
+        baseAngle + p.mouthAngle * Math.PI,
+        baseAngle + (2 - p.mouthAngle) * Math.PI);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    function drawGhost(g) {
+      const gx = g.x * TILE, gy = g.y * TILE;
+      const r = TILE/2 - 1;
+      let color = g.color;
+      if (g.mode === 'frightened') {
+        color = powerTimer < 100 && Math.floor(powerTimer/10)%2===0 ? '#fff' : '#0000cc';
+      }
+      if (g.mode === 'eaten') color = 'transparent';
+
+      if (g.mode !== 'eaten') {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(gx, gy - r/2, r, Math.PI, 0);
+        ctx.lineTo(gx + r, gy + r/2);
+        // 裙摆
+        const waves = 3;
+        for (let i = 0; i < waves; i++) {
+          const wx = gx + r - (i * 2 * r / waves);
+          ctx.quadraticCurveTo(wx - r/waves, gy + r, wx - 2*r/waves, gy + r/2);
+        }
+        ctx.lineTo(gx - r, gy + r/2);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // 眼睛
+      if (g.mode !== 'frightened') {
+        const eyeOffsets = [[-r*0.35, -r*0.2], [r*0.35, -r*0.2]];
+        for (const [ex, ey] of eyeOffsets) {
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.ellipse(gx+ex, gy+ey, r*0.25, r*0.3, 0, 0, Math.PI*2);
+          ctx.fill();
+          ctx.fillStyle = '#00f';
+          ctx.beginPath();
+          ctx.arc(gx+ex + g.eyeDir.dx*2, gy+ey + g.eyeDir.dy*2, r*0.12, 0, Math.PI*2);
+          ctx.fill();
+        }
+      } else {
+        // 恐惧表情
+        ctx.fillStyle = '#fff';
+        ctx.font = `${TILE*0.6}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('😨', gx, gy);
+      }
+    }
+
+    function draw() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      drawMap();
+      ghosts.forEach(drawGhost);
+      drawPacman();
+    }
+
+    // ---- 主循环 ----
+    function gameLoop(ts) {
+      if (gameState === 'playing') {
+        movePacman();
+        ghosts.forEach(moveGhost);
+        checkCollisions();
+
+        if (powerTimer > 0) {
+          powerTimer--;
+          if (powerTimer === 0) {
+            ghosts.forEach(g => { if (g.mode === 'frightened') g.mode = 'chase'; });
+          }
+        }
+        // 切换模式
+        const t = Math.floor(ts / 1000);
+        ghosts.forEach(g => {
+          if (g.mode === 'scatter' && t % 20 > 7) g.mode = 'chase';
+          if (g.mode === 'chase'   && t % 20 <= 7) g.mode = 'scatter';
+        });
+      }
+      draw();
+      animFrame = requestAnimationFrame(gameLoop);
+    }
+
+    // ---- 输入 ----
+    document.addEventListener('keydown', e => {
+      const p = pacman;
+      if (e.key === 'ArrowLeft'  || e.key === 'a') { p.nextDx = -1; p.nextDy = 0; }
+      if (e.key === 'ArrowRight' || e.key === 'd') { p.nextDx =  1; p.nextDy = 0; }
+      if (e.key === 'ArrowUp'    || e.key === 'w') { p.nextDx =  0; p.nextDy = -1; }
+      if (e.key === 'ArrowDown'  || e.key === 's') { p.nextDx =  0; p.nextDy =  1; }
+
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (gameState === 'ready' || gameState === 'over') {
+          initGame();
+          gameState = 'playing';
+          setMessage('');
+        } else if (gameState === 'playing') {
+          gameState = 'paused';
+          setMessage('⏸ 已暂停，按 Enter 继续');
+        } else if (gameState === 'paused') {
+          gameState = 'playing';
+          setMessage('');
+        } else if (gameState === 'dead') {
+          // 重置位置
+          pacman.x = 13.5; pacman.y = 23;
+          pacman.dx = 0; pacman.dy = 0;
+          pacman.dead = false;
+          ghosts.forEach((g, i) => {
+            g.x = 11 + i*2; g.y = 14;
+            g.dx = 0; g.dy = 0;
+            g.mode = 'house';
+            g.houseTimer = i * 60;
+          });
+          gameState = 'playing';
+          setMessage('');
+        } else if (gameState === 'win') {
+          level++;
+          initGame();
+          gameState = 'playing';
+          setMessage('');
+        }
+      }
+    });
+
+    // 触摸控制
+    let touchStartX, touchStartY;
+    canvas.addEventListener('touchstart', e => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      e.preventDefault();
+    }, { passive: false });
+    canvas.addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      const p = pacman;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        p.nextDx = dx > 0 ? 1 : -1; p.nextDy = 0;
+      } else {
+        p.nextDx = 0; p.nextDy = dy > 0 ? 1 : -1;
+      }
+      if (gameState === 'ready' || gameState === 'over' || gameState === 'dead' || gameState === 'win') {
+        if (gameState === 'over' || gameState === 'ready') initGame();
+        if (gameState === 'dead') {
+          pacman.x = 13.5; pacman.y = 23;
+          pacman.dx = 0; pacman.dy = 0;
+          pacman.dead = false;
+          ghosts.forEach((g,i) => { g.x=11+i*2; g.y=14; g.dx=0; g.dy=0; g.mode='house'; g.houseTimer=i*60; });
+        }
+        if (gameState === 'win') { level++; initGame(); }
+        gameState = 'playing';
+        setMessage('');
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    // 初始化
+    highscore = parseInt(localStorage.getItem('pacman_hs') || '0');
+    initGame();
+    animFrame = requestAnimationFrame(gameLoop);
+
+    // 保存最高分
+    setInterval(() => {
+      if (score > (highscore||0)) {
+        highscore = score;
+        localStorage.setItem('pacman_hs', highscore);
+        updateUI();
+      }
+    }, 1000);
+  })();
+  </script>
+</body>
+</html>
